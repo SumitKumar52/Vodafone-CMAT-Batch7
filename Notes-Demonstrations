@@ -1,6 +1,6 @@
 # sudo su –
 
-Let’s us Install Ansible on this Machine:
+Let’s us Install Ansible on the Master Node:
 ********************************************************
 # ansible --version
 
@@ -13,7 +13,7 @@ Setup Ansible:
 
 Ansible Installation is complete now on the Master node.
 
-OPEN SECURE SHELL CONNECTION – SSH Connection setup
+OPEN SECURE SHELL CONNECTION – SSH Connection setup On Master Node
 ================================================
 Step 1:
 
@@ -327,6 +327,191 @@ Save the file and execute.
 
 # ansible-playbook playbookwhen.yml
 
+==============================================
+
+
+# vim WhenPlaybook2.yml
+
+- name: Introduction to When Conditions
+  become: true
+  hosts: webserver
+  tasks:
+  - name: Install a git package
+    package: name=git state=present
+    when: (ansible_distribution == "Centos" and ansible_distribution_major_version == "8") or
+          (ansible_distribution == "Ubuntu" and ansible_distribution_major_version == "20")
+
+
+Save the file and execute.
+
+# ansible-playbook playbookwhen.yml
+=========================================
+Custom Variables:
+==================================
+vim Customvariable.yml
+
+- name: Introduction to Custom variables
+  hosts: webserver
+  become: true
+  vars:
+   pkg_name: apache2
+  tasks:
+  - name: Update apt-get repo
+    command: apt-get update
+  - name: Install {{pkg_name}}  package
+    package: name={{pkg_name}} state=present
+  - name: Start the {{pkg_name}} application
+    service: name={{pkg_name}} state=started
+
+
+# ansible-playbook Customvariable.yml
+
+Extra variables value at runtime.
+
+# ansible-playbook Customvariable.yml --extra-vars pkg_name=apache2
+
+=========================================
+
+- name: Introduction to Custom variables
+  hosts: webserver
+  become: true
+  vars_prompt:
+   - name: pkg_name
+     prompt: Enter the package Name
+     private: false
+  tasks:
+  - name: Update apt-get repo
+    command: apt-get update
+  - name: Install {{pkg_name}}  package
+    package: name={{pkg_name}} state=present
+  - name: Start the {{pkg_name}} application
+    service: name={{pkg_name}} state=started
+
+================================================
+varibale with multiple values in a file.
+
+# vim variables.yml
+
+   pkg_name: 
+    - git
+    - apache2
+    - tree
+    - nano
+   dest_path: /var/www/html
+
+Save the file (:wq!)
+
+# vim varsfileplaybook.yml
+
+
+- name: Introduction to variables in a file
+  hosts: webserver
+  become: true
+  vars_files:
+   - variables.yml
+  tasks:
+  - name: Update apt-get repo
+    command: apt-get update
+  - name: Install {{pkg_name[1]}}  package
+    package: name={{pkg_name[1]}} state=present
+  - name: Start the {{pkg_name[1]}} application
+    service: name={{pkg_name[1]}} state=started
+  - name: Deploy a file on apache2 server
+    copy: src=index.html dest={{dest_path}}
+
+save the file (:wq!)
+
+Create an index.html file
+
+# vim index.html
+
+<h1> file from ansible Controller </h1>
+
+Execute the playbook
+
+ansible-playbook varsfileplaybook.yml
+
+======================================
+
+Handlers Demo1:
+
+- name: Introduction to Custom variables
+  hosts: webserver
+  become: true
+  tasks:
+  - name: Update apt-get repo
+    command: apt-get update
+  - name: Install apache2  package
+    package: name=apache2 state=present
+  - name: Start the apache2  application
+    service: name=apache2 state=started
+  - name: Deploy a file on apache2 server
+    copy: src=index.html dest=/var/www/html
+    notify: restart the apache2 application
+  handlers:
+  - name: restart the apache2 application
+    service: name=apache2 state=restarted
+
+=======================================================
+
+Demo 2:
+
+Flush Handlers:
+
+- name: Handlers demo2
+  hosts: webserver
+  become: true
+  tasks:
+  - name: Create a file
+    file: name=/tmp/ansible_file state=touch
+    notify: File creation
+    name: flush handlers for this task
+    meta: flush_handlers
+  - name: startch apache2
+    service: name=apache2 state=started
+    notify: service status
+  - name: update apt-get
+    command: apt-get update
+    notify: Apt update
+  - name: Execute a command
+    command: hostname -s
+    register: output_var
+    notify: print output
+  handlers:
+  - name: service status
+    debug: msg="service is running"
+  - name: File creation
+    debug: msg="File created successfully"
+  - name: Apt update
+    debug: msg="apt updated  successfully"
+  - name: print output
+    debug: var=output_var.stdout
+
+=============================================================
+
+Demo 3: force handlers
+
+- name: Handlers demo2
+  hosts: webserver
+  become: true
+  tasks:
+  - name: Create a file
+    file: name=/tmp/ansible_file state=touch
+    notify: File creation
+  - name: start apache2
+    service: name=apache2 state=started
+    notify: service status
+  - fail:
+  handlers:
+  - name: service status
+    debug: msg="service is running"
+  - name: File creation
+    debug: msg="File created successfully"
+
+
+# ansible-playbook handlersdemo2.yml --force-handlers
+
+==================================
 Playbook 5: Loops
 ========================================
 
@@ -384,5 +569,48 @@ vim playbookloop2.yml
   - name: Create users on host servers
     user: name={{item}} state=present
     loop: "{{user_list}}"
-    
-    
+
+=======================
+
+Demo on tags:
+
+========================================================
+vim playbooktags.yml
+
+- name: Tags in Ansible
+  hosts: webserver
+  become: true
+  tasks:
+  - name: Create a file
+    file: name=/tmp/ansible_file state=touch
+    tags: createfile
+  - name: Create a file2
+    file: name=/tmp/ansible_file2 state=touch
+    tags: createfile
+  - name: start apache2
+    service: name=apache2 state=started
+    tags: startservice
+  - name: update apt-get
+    command: apt-get update
+    tags: execmd
+  - name: Execute a command
+    command: hostname -s
+    register: output_output
+    tags: execmd
+  - name: Install a git package
+    package: name=git state=present
+    tags: install
+  - name: Start a service
+    service: name=apache2 state=started
+    tags: startservice
+
+
+
+# ansible-playbook  tagsplaybook.yml --tags createfile
+# ansible-playbook  tagsplaybook.yml --tags createfile,execmd
+# ansible-playbook  tagsplaybook.yml --skip-tags execmd
+# ansible-playbook playbooktags.yml --tags untagged
+# ansible-playbook playbooktags.yml --tags tagged
+
+
+
